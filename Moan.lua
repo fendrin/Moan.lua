@@ -1,6 +1,13 @@
+
+local function make_moan()
+
+local typing
+local love  = love
+local get   = require"filesystem"
+local asset = get.assets
 -------------------------------------------------
 -- Möan.lua
--- A simple messagebox system for LÖVE <br><br> Forum link: 
+-- A simple messagebox system for LÖVE <br><br> Forum link:
 -- [https://love2d.org/forums/viewtopic.php?f=5&t=84110](https://love2d.org/forums/viewtopic.php?f=5&t=84110)
 -- <br>GitHub: [https://github.com/twentytwoo/Moan.lua](https://github.com/twentytwoo/Moan.lua)
 -- <br><br><img src="https://github.com/twentytwoo/Moan.lua/raw/master/preview.gif" style="max-width: 100%">
@@ -42,12 +49,12 @@ local utf8 = require("utf8")
 -- @string _DESCRIPTION Short description of the library
 -- @tparam table UI UI configuration
 -------------------------------------------------
-Moan = {
-  indicatorCharacter = ">",
+local Moan = {
+  indicatorCharacter = "",
   optionCharacter = "=> ",
   indicatorDelay = 25,
   selectButton = "space",
-  typeSpeed = 0.01,
+  typeSpeed = 0.000000001,
   debug = false,
   mute = false,
   allMsgs = {},
@@ -79,10 +86,21 @@ local typeTimerMax = Moan.typeSpeed
 local typePosition = 0
 -- Initialise timer for the indicator
 local indicatorTimer = 0
-local defaultFont = love.graphics.newFont()
+
+local defaultFont      = love.graphics.newFont(
+    asset("fonts/Lato-Regular.ttf"), 16)
+-- local defaultFont = love.graphics.newFont("LearningCurve.ttf", 30)
+
+local defaultTitleFont = love.graphics.newFont(
+    asset("fonts/Lato-Regular.ttf"), 16)
+-- local defaultTitleFont = love.graphics.newFont("assets/fonts/DejaVuSans.ttf", 20)
 
 if Moan.font == nil then
   Moan.font = defaultFont
+end
+
+if Moan.titleFont == nil then
+  Moan.titleFont = defaultTitleFont
 end
 
 -------------------------------------------------
@@ -108,16 +126,17 @@ end
 --                    {"Option n...", function() optionn() end}}
 --                   })
 -------------------------------------------------
-function Moan.speak(title, messages, config)
+function Moan.speak(title, messages, cfg)
+  local titleColor
   if type(title) == "table" then
     titleColor = title[2]
     title = title[1]
   else -- just a string
-    titleColor = {255, 255, 255}
+    titleColor = {1, 1, 1}
   end
 
   -- Config checking / defaulting
-  local config = config or {}
+  local config = cfg or {}
   local x = config.x
   local y = config.y
   local image = config.image or "nil"
@@ -125,7 +144,7 @@ function Moan.speak(title, messages, config)
   local onstart = config.onstart or function() end
   local oncomplete = config.oncomplete or function() end
   if image == nil or type(image) ~= "userdata" then
-    -- image = Moan.noImage
+    image = Moan.noImage
   end
 
   -- Insert \n before text is printed, stops half-words being printed
@@ -179,6 +198,8 @@ end
 -------------------------------------------------
 function Moan.update(dt)
   -- Check if the output string is equal to final string, else we must be still typing it
+  printedText = Moan.currentMessage
+
   if printedText == Moan.currentMessage then
     typing = false else typing = true
   end
@@ -196,18 +217,21 @@ function Moan.update(dt)
     end
 
     -- Check if we're the 2nd to last message, verify if an options table exists, on next advance show options
-    if Moan.allMsgs[Moan.currentMsgInstance].messages[Moan.currentMsgKey+1] == "\n" and type(Moan.allMsgs[Moan.currentMsgInstance].options) == "table" then
+    if Moan.allMsgs[Moan.currentMsgInstance].messages[Moan.currentMsgKey+1] == "\n" and
+        type(Moan.allMsgs[Moan.currentMsgInstance].options) == "table" then
       Moan.showingOptions = true
     end
     if Moan.showingOptions then
       -- Constantly update the option prefix
       for i=1, #Moan.allMsgs[Moan.currentMsgInstance].options do
         -- Remove the indicators from other selections
-        Moan.allMsgs[Moan.currentMsgInstance].options[i][1] = string.gsub(Moan.allMsgs[Moan.currentMsgInstance].options[i][1], Moan.optionCharacter.." " , "")
+        Moan.allMsgs[Moan.currentMsgInstance].options[i][1] = string.gsub(
+            Moan.allMsgs[Moan.currentMsgInstance].options[i][1], Moan.optionCharacter.." " , "")
       end
       -- Add an indicator to the current selection
       if Moan.allMsgs[Moan.currentMsgInstance].options[Moan.currentOption][1] ~= "" then
-        Moan.allMsgs[Moan.currentMsgInstance].options[Moan.currentOption][1] = Moan.optionCharacter.." ".. Moan.allMsgs[Moan.currentMsgInstance].options[Moan.currentOption][1]
+        Moan.allMsgs[Moan.currentMsgInstance].options[Moan.currentOption][1] =
+            Moan.optionCharacter.." ".. Moan.allMsgs[Moan.currentMsgInstance].options[Moan.currentOption][1]
       end
     end
 
@@ -216,6 +240,9 @@ function Moan.update(dt)
       Moan.paused = true
       else Moan.paused = false
     end
+
+    --
+
 
     --https://www.reddit.com/r/love2d/comments/4185xi/quick_question_typing_effect/
     if typePosition <= string.len(Moan.currentMessage) then
@@ -305,27 +332,46 @@ function Moan.draw()
   -- This section is mostly unfinished...
   -- Lots of magic numbers and generally takes a lot of
   -- trial and error to look right, beware.
+  local imgW, imgH
 
   love.graphics.setDefaultFilter( "nearest", "nearest")
   if Moan.showingMessage then
-    local scale = 0.26
+    -- local scale = 0.26
+    local scale = 1
     local padding = 10
 
-    local boxH = 118
-    local boxW = love.graphics.getWidth()-(2*padding)
-    local boxX = padding
-    local boxY = love.graphics.getHeight()-(boxH+padding)
+    local canvas = love.graphics.getCanvas( )
+    local height, width
+    if canvas then
+        height = canvas:getHeight()
+        width  = canvas:getWidth()
+    else
+        height = love.graphics.getHeight()
+        width  = love.graphics.getWidth()
+    end
+
+    local boxH = 200
+    -- local boxH = Moan.currentImage:getHeight()
+    local boxW = width --  -(2*padding)
+    local boxX = 0 --padding
+    local boxY = height - boxH -- -(boxH+padding)
     if Moan.UI.messageboxPos == "top" then boxY = 10 end
 
     local fontHeight = Moan.font:getHeight(" ")
 
-    local imgX = (boxX+padding)*(1/scale)
-    local imgY = (boxY+padding)*(1/scale)
+    -- local imgX = (boxX+padding)*(1/scale)
+    -- local imgX = (boxX)*(1/scale)
+    local imgX = 1
+    -- local imgY = (boxY+padding)*(1/scale)
+    local imgY = (boxY)*(1/scale)
+    -- local img
+
     if type(Moan.currentImage) == "userdata" then
+      imgY = love.graphics.getHeight() - Moan.currentImage:getHeight()
       imgW = Moan.currentImage:getWidth()
       imgH = Moan.currentImage:getHeight()
     else
-      imgW = -10/(scale)
+      imgW = 30  ---10/(scale)
       imgH = 0
     end
 
@@ -335,7 +381,7 @@ function Moan.draw()
 
     local titleBoxW = Moan.font:getWidth(Moan.currentTitle)+(2*padding)
     local titleBoxH = fontHeight+padding
-    local titleBoxX = boxX
+    -- local titleBoxX = boxX
     -- overrides
     local titleBoxY = boxY-titleBoxH-(padding/2)
     if Moan.UI.messageboxPos == "top" then
@@ -344,33 +390,41 @@ function Moan.draw()
     if Moan.UI.titleBoxPos == "right" then titleBoxX = boxX+boxW-(titleBoxW) end
 
     local titleColor = Moan.allMsgs[Moan.currentMsgInstance].titleColor
-    local titleX = titleBoxX+padding
-    local titleY = titleBoxY+2
+    -- local titleX = titleBoxX+padding
+    -- local titleY = titleBoxY+2
 
     local textX = (imgX+imgW)/(1/scale)+padding
     local textY = boxY
-    local msgTextY = textY+Moan.font:getHeight()/1.2
+    -- local msgTextY = textY+Moan.font:getHeight()/1.2
     local msgLimit = boxW-(imgW/(1/scale))-(4*padding)
     if Moan.UI.imagePos == "right" then textX = boxX+padding end
 
     local optionsY = textY+Moan.font:getHeight(printedText)-(padding/1.6)
     local optionsSpace = fontHeight/1.5
 
-    local fontColour = { 255, 255, 255, 255 }
-    local boxColour = { 0, 0, 0, 222 }
+    local fontColour = { 1, 1, 1, 1 }
+    local boxColour = { 0, 0, 0, 0.6 }
 
 
     love.graphics.setFont(Moan.font)
 
     -- Message title
-    love.graphics.setColor(boxColour)
-    love.graphics.rectangle("fill", titleBoxX, titleBoxY, titleBoxW, titleBoxH)
-    love.graphics.setColor(titleColor)
-    love.graphics.print(Moan.currentTitle, titleX, titleY)
+    -- love.graphics.setColor(boxColour)
+    -- love.graphics.rectangle("fill", titleBoxX, titleBoxY, titleBoxW, titleBoxH)
+    -- love.graphics.setColor(titleColor)
+    -- love.graphics.print(Moan.currentTitle, titleX, titleY)
+    local border = love.graphics.newImage(asset"images/dialogs/thin_translucent-border-top.png")
+    local border_x = 1
+    while (border_x < love.graphics.getWidth()) do
+        love.graphics.draw(border, border_x, boxY - border:getHeight())
+        border_x = border_x + border:getWidth()
+    end
 
     -- Main message box
     love.graphics.setColor(boxColour)
     love.graphics.rectangle("fill", boxX, boxY, boxW, boxH)
+
+    -- love.graphics.rectangle("fill", 0, boxY, love.graphics.getWidth(), love.graphics.getHeight() - boxY)
     love.graphics.setColor(fontColour)
 
     -- Message avatar
@@ -381,12 +435,25 @@ function Moan.draw()
       love.graphics.pop()
     end
 
+    -- Message title
+    -- love.graphics.setColor(boxColour)
+    -- love.graphics.rectangle("fill", titleBoxX, titleBoxY, titleBoxW, titleBoxH)
+    love.graphics.setColor(titleColor)
+    love.graphics.setFont(Moan.titleFont)
+    love.graphics.print(Moan.currentTitle, textX, textY + padding)
+    love.graphics.setFont(Moan.font)
+    love.graphics.setColor(fontColour)
+
+
     -- Message text
-    if Moan.autoWrap then
-      love.graphics.print(printedText, textX, textY)
-    else
-      love.graphics.printf(printedText, textX, textY, msgLimit)
-    end
+    -- if Moan.autoWrap then
+    --   love.graphics.print(printedText, textX, textY)
+    -- else
+    --   love.graphics.printf(printedText, textX, textY, msgLimit)
+    -- end
+
+    -- love.graphics.printf(printedText, textX, textY + fontHeight + 2*padding, msgLimit)
+    love.graphics.printf(Moan.currentMessage, textX, textY + fontHeight + 2*padding, msgLimit)
 
     -- Message options (when shown)
     if Moan.showingOptions and typing == false then
@@ -468,8 +535,8 @@ function Moan.keyreleased(key)
   if key == Moan.selectButton then
     if Moan.paused then
       -- Get the text left and right of "--"
-      leftSide = string.sub(Moan.currentMessage, 1, string.len(printedText))
-      rightSide = string.sub(Moan.currentMessage, string.len(printedText)+3, string.len(Moan.currentMessage))
+      local leftSide = string.sub(Moan.currentMessage, 1, string.len(printedText))
+      local rightSide = string.sub(Moan.currentMessage, string.len(printedText)+3, string.len(Moan.currentMessage))
       -- And then concatenate them, kudos to @pfirsich for the help :)
       Moan.currentMessage = leftSide .. " " .. rightSide
       -- Put the typerwriter back a bit and start up again
@@ -528,7 +595,8 @@ function Moan.moveCamera()
   if Moan.currentCamera ~= nil then
     -- Move the camera to the new instances position
     if (Moan.allMsgs[Moan.currentMsgInstance].x and Moan.allMsgs[Moan.currentMsgInstance].y) ~= nil then
-      flux.to(Moan.currentCamera, 1, { x = Moan.allMsgs[Moan.currentMsgInstance].x, y = Moan.allMsgs[Moan.currentMsgInstance].y }):ease("cubicout")
+      flux.to(Moan.currentCamera, 1, { x = Moan.allMsgs[Moan.currentMsgInstance].x,
+                                       y = Moan.allMsgs[Moan.currentMsgInstance].y }):ease("cubicout")
     end
   end
 end
@@ -696,3 +764,6 @@ function Moan.wordwrap(str, limit)
 end
 
 return Moan
+end
+
+return make_moan
